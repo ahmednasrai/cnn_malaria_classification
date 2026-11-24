@@ -1,88 +1,147 @@
-# CNN Malaria Classification
+# Malaria Cell Classification with a CNN
 
-This project uses a Convolutional Neural Network (CNN) to classify microscopic cell images as either:
+A deep learning project that classifies microscopic blood-cell images as **Parasitized** (infected with malaria) or **Uninfected**.
 
-- **Parasitized**: The cell contains malaria parasites.
-- **Uninfected**: The cell does not contain malaria parasites.
-
-The project is written in a Jupyter Notebook and is ready to run in Google Colab.
-
-## Project Files
-
-- `Malaria_Cell_Classification.ipynb` — Downloads the dataset, prepares the images, trains the CNN, evaluates the model, and creates a Gradio interface.
-- `images/` — Stores project images.
+The analysis is in `Malaria_Cell_Classification.ipynb`. The model is a small Convolutional Neural Network built with TensorFlow/Keras.
 
 ## Dataset
 
-The notebook downloads the **Cell Images for Detecting Malaria** dataset from Kaggle using `kagglehub`. The dataset is divided into two folders:
+The notebook downloads the **Cell Images for Detecting Malaria** dataset from Kaggle with `kagglehub` (`iarunava/cell-images-for-detecting-malaria`).
 
-- `Parasitized`
-- `Uninfected`
+- Two balanced classes: `Parasitized` and `Uninfected`
+- **27,558 images** in total (13,779 per class)
+- Images have different sizes, so all are resized to **128 × 128** pixels before training
 
-The images are split into:
+### Split
 
-- 80% for training
-- 20% for testing
+Each class is shuffled with a fixed seed and split **80% train / 20% test**:
 
-Within the training data, 20% is also used as validation data.
+| Split | Images per class | Total |
+| --- | ---: | ---: |
+| Train (80%) | 11,023 | 22,046 |
+| Test (20%) | 2,756 | 5,512 |
+
+A further **20% of the training folder** is used for validation, which gives the generators:
+
+| Generator | Images |
+| --- | ---: |
+| Training (augmented) | 17,638 |
+| Validation | 4,408 |
+| Test | 5,512 |
+
+The files are copied into a local `malaria_split/` folder so the generators can read them with `flow_from_directory`. The folder is recreated on every run to avoid mixing old and new files.
+
+## Workflow
+
+1. **Setup** — import the libraries, set the random seed (`SEED = 42`), and define the configuration (`IMG_SIZE = 128`, `BATCH_SIZE = 32`, `EPOCHS = 15`).
+2. **Download the dataset** with `kagglehub`.
+3. **Explore sample images** from both classes.
+4. **Split** each class into train and test folders.
+5. **Build the data generators**:
+   - Training images use augmentation (rotation, shifts, shear, zoom, and flips).
+   - Validation images are only rescaled.
+   - Test images are rescaled with `shuffle=False`, so predictions stay aligned with the true labels.
+6. **Build the CNN** — three convolution blocks with batch normalization and max pooling, followed by global average pooling and a small dense head.
+7. **Compile and train** with Adam and early stopping / learning-rate reduction.
+8. **Evaluate** on the held-out test set with a confusion matrix and a classification report.
+9. **Predict a single image** with a reusable helper function.
+10. **Optional Gradio app** — disabled by default.
+
+All images are scaled to the `[0, 1]` range.
 
 ## Model
 
-The notebook builds a CNN using TensorFlow and Keras. The model includes:
+| Layer | Details |
+| --- | --- |
+| Conv block 1 | `Conv2D(32, 3×3, relu)` → BatchNorm → MaxPool |
+| Conv block 2 | `Conv2D(64, 3×3, relu)` → BatchNorm → MaxPool |
+| Conv block 3 | `Conv2D(128, 3×3, relu)` → BatchNorm → MaxPool |
+| Head | GlobalAveragePooling → `Dense(128, relu)` → `Dropout(0.4)` → `Dense(1, sigmoid)` |
 
-- Convolution layers
-- Batch normalization
-- Max pooling layers
-- Global average pooling
-- Dense layers
-- Dropout
+- **Total parameters:** 110,785 (110,337 trainable, 448 non-trainable)
+- **Optimizer:** Adam with a learning rate of `0.0003`
+- **Loss:** binary cross-entropy
+- **Metric:** accuracy
 
-The final layer uses sigmoid activation to classify each image as parasitized or uninfected.
+### Training callbacks
+
+- **EarlyStopping** monitors `val_loss` with `patience=5` and restores the best weights.
+- **ReduceLROnPlateau** monitors `val_loss`, halves the learning rate after two stalled epochs, and stops at `min_lr=0.000001`.
 
 ## Results
 
-In the saved notebook run, the model achieved:
+Results from the saved GPU run:
 
-- **Test accuracy:** 95.19%
-- **Test loss:** 0.1340
+| Metric | Value |
+| --- | ---: |
+| Test accuracy | **95.19%** |
+| Test loss | **0.1340** |
 
-The notebook also shows a confusion matrix and a complete classification report.
+### Classification report (test set)
 
-> These results may change when the notebook is run with another data split or environment.
+| Class | Precision | Recall | F1-score | Support |
+| --- | ---: | ---: | ---: | ---: |
+| Parasitized | 0.97 | 0.93 | 0.95 | 2,756 |
+| Uninfected | 0.94 | 0.97 | 0.95 | 2,756 |
+| **Accuracy** | | | **0.95** | **5,512** |
+| Macro avg | 0.95 | 0.95 | 0.95 | 5,512 |
+| Weighted avg | 0.95 | 0.95 | 0.95 | 5,512 |
+
+Precision and recall are balanced across the two classes. Parasitized recall (0.93) is slightly lower than Uninfected recall (0.97), so the model misses more parasitized cells than uninfected ones — the more costly error in a screening context.
+
+The notebook also renders a confusion matrix and the full classification report.
+
+> The saved outputs come from the original GPU run. Re-running the notebook may produce slightly different values because of random initialization and shuffling.
 
 ## Requirements
 
-The notebook uses:
+Python 3.11+ with:
 
-- Python
-- TensorFlow
-- NumPy
-- Pandas
-- Matplotlib
-- Seaborn
-- scikit-learn
-- KaggleHub
-- Gradio
+```bash
+pip install tensorflow kagglehub matplotlib seaborn scikit-learn
+```
+
+Optional, only for the Gradio demo:
+
+```bash
+pip install gradio
+```
 
 ## How to Run
 
-1. Open `Malaria_Cell_Classification.ipynb` in Google Colab.
-2. Connect a GPU runtime for faster training.
-3. Run the notebook cells from top to bottom.
-4. Give KaggleHub permission to download the dataset if requested.
-5. Wait for training to finish.
-6. Run the final cell to start the Gradio interface.
-7. Upload a cell image to test the model.
+1. Open `Malaria_Cell_Classification.ipynb` in Jupyter Notebook, JupyterLab, VS Code, or Google Colab.
+2. A GPU runtime is recommended — the saved run took roughly 2–2.5 minutes per epoch.
+3. Run all cells from top to bottom.
+4. Allow `kagglehub` to download the dataset if prompted.
+5. Wait for training and evaluation to finish.
 
-## How It Works
+Training uses `EarlyStopping`, so it may stop before the 15-epoch limit.
 
-1. Download and load the malaria cell images.
-2. Resize the images to 128 × 128 pixels.
-3. Split the images into training, validation, and test sets.
-4. Train the CNN to recognize image patterns.
-5. Evaluate the model on images it has not seen before.
-6. Upload a new image through the Gradio interface to receive a prediction.
+### Optional Gradio demo
+
+The Gradio app is **disabled by default** so the notebook runs end-to-end without opening a server. To use it:
+
+1. Install Gradio.
+2. Set `RUN_GRADIO = True` in the app cell.
+3. Run the cell and upload a cell image.
+
+Add `share=True` to `demo.launch()` only if you need a temporary public link.
+
+## Project Files
+
+| File | Description |
+| --- | --- |
+| `Malaria_Cell_Classification.ipynb` | Dataset download, image exploration, splitting, augmentation, CNN training, evaluation, and optional Gradio app |
+| `README.md` | Project overview, results, and run instructions |
+| `images/` | A few sample `Parasitized` and `Uninfected` cell images |
+
+## Notes
+
+- The split uses `SEED = 42` for reproducibility.
+- Augmentation is applied only to the training data; validation and test data are only rescaled.
+- The test set is never used for training or validation.
+- For a stronger model, transfer learning (for example MobileNetV2 or EfficientNet) is a natural next step.
 
 ## Important Note
 
-This project is for learning and demonstration. It should not replace advice or diagnosis from a qualified medical professional.
+This project is for learning and demonstration only. It is not a medical device and must not replace diagnosis by a qualified medical professional.
