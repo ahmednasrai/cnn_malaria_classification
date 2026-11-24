@@ -117,7 +117,7 @@ pip install gradio
 
 Training uses `EarlyStopping`, so it may stop before the 15-epoch limit.
 
-### Optional Gradio demo
+### Gradio demo
 
 The Gradio app is **disabled by default** so the notebook runs end-to-end without opening a server. To use it:
 
